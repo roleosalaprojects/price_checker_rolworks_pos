@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:price_checker/pages/price_checker.dart';
+import 'package:price_checker/pages/price_checker_page.dart';
 
 void main() {
   runApp(const MyApp());
