@@ -1,10 +1,15 @@
 import 'dart:async';
 
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:flutter/material.dart';
+import 'package:price_checker/components/custom_icon_button.dart';
 import 'package:price_checker/components/custom_text.dart';
-import 'package:price_checker/components/custom_text_field.dart';
-import 'package:price_checker/models/ProductModel.dart';
+import 'package:price_checker/pages/products/product_details_page.dart';
 import 'package:price_checker/services/HTTPService.dart';
+import 'package:price_checker/services/helpers.dart';
+
+import '../controllers/price_checker_page_controller.dart';
+import '../models/product_model.dart';
 
 class PriceCheckerPage extends StatefulWidget {
   const PriceCheckerPage({super.key});
@@ -14,50 +19,42 @@ class PriceCheckerPage extends StatefulWidget {
 }
 
 class _PriceCheckerPageState extends State<PriceCheckerPage> {
-  late List<dynamic> products;
   late Timer timer;
   TextEditingController searchController = TextEditingController();
   bool _isEmpty = true;
   //get products
   Future<void> onSubmitted(String value) async {
     if (value.length > 2) {
-      var response = await httpGet('/items/search', {'query': value});
+      var response = await httpGet('/items/search', {'term': value});
+      response = response['products'];
       products = response.map((e) => ProductModel.fromJson(e)).toList();
       if (products.length == 0) {
-        DialogAlert("No Product Found!");
+        // DialogAlert(context, "No Product Found!");
+        showSnack(
+          customSnack(
+              'Product not found.',
+              "We can't seem to find the product you are looking for. Please ask cashiers for more info.",
+              ContentType.failure),
+          context,
+        );
       }
       setState(() {
         _isEmpty = (products.length > 0) ? false : true;
       });
     } else {
-      DialogAlert("Please enter at least 3 or more letters.");
+      // DialogAlert(context, "Please enter at least 3 or more letters.");
+      showSnack(
+        customSnack(
+          'Not enough keywords!',
+          "Please enter at least 3 or more letters.",
+          ContentType.warning,
+        ),
+        context,
+      );
     }
     searchController.clear();
     focusOnSearch();
     if (!timer.isActive) startTimer();
-  }
-
-  //showdialog
-  void DialogAlert(String msg) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: CustomText(
-            content: msg,
-            fontSize: 40,
-          ),
-          actions: [
-            ElevatedButton(
-              child: const CustomText(content: "Ok", fontSize: 30),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   //focus on search text field
@@ -82,72 +79,58 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
       return Align(
         alignment: Alignment.center,
         child: Container(
+          height: double.maxFinite,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(25),
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(50),
-            child: CustomText(
-              content: "Put the item in the scanner\nto check the price.",
-              fontSize: 60,
+          child: const Center(
+            child: Padding(
+              padding: EdgeInsets.all(25),
+              child: CustomText(
+                content: "Put the item in the scanner\nto check the price.",
+                fontSize: 40,
+                overFlow: TextOverflow.visible,
+              ),
             ),
           ),
         ),
       );
     } else {
       if (products.length == 1) {
-        return Align(
-          alignment: Alignment.center,
-          child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
-                color: Colors.white,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(100),
-                child: Column(
-                  children: [
-                    CustomText(content: products[0].name, fontSize: 45),
-                    CustomText(
-                        content: products[0].price.toStringAsFixed(2),
-                        fontSize: 40)
-                  ],
-                ),
-              )),
-        );
+        return ProductDetailsPage(product: products[0]);
       } else {
-        return Flexible(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                if (products.length == 1) {
-                } else if (products.length > 0) {
-                  return Padding(
-                    padding: EdgeInsets.all(10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: ListTile(
-                        title: CustomText(
-                          content:
-                              "${products[index].name!} - ₱ ${products[index].price!.toStringAsFixed(2)}",
-                          fontSize: 16.0,
-                        ),
+        return Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              if (products.length == 1) {
+              } else if (products.length > 0) {
+                return Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: ListTile(
+                      title: CustomText(
+                        content:
+                            "${products[index].name!} - ₱ ${numberFormatter.format(getProductPrice(products[index]))}",
+                        fontSize: 16.0,
                       ),
                     ),
-                  );
-                } else {
-                  return const CustomText(
-                      content: "No Data Available", fontSize: 45);
-                }
-              },
-            ),
+                  ),
+                );
+              } else {
+                return const CustomText(
+                  content: "No Data Available",
+                  fontSize: 45,
+                );
+              }
+            },
           ),
         );
       }
@@ -165,33 +148,65 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            width: 250,
-          ),
-          ProductStatusWidget(),
-          Container(
-            width: 250,
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: "Tap here, then scan to get Product Details",
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
+      body: Container(
+        decoration: BoxDecoration(color: appColor),
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: CustomIconButton(
+                onTap: () => promptHostDialog(context),
+                backgroundColor: appColor,
+                iconColor: Colors.white70,
+                icon: Icons.settings,
               ),
-              autofocus: true,
-              focusNode: searchFocus,
-              controller: searchController,
-              textInputAction: TextInputAction.go,
-              onSubmitted: onSubmitted,
             ),
-          )
-        ],
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10.0, right: 10.0),
+                      child: ClipRRect(
+                        clipBehavior: Clip.hardEdge,
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: Image.asset(
+                          'assets/transparent_store.png',
+                          width: 300.0,
+                          height: 300.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: ProductStatusWidget(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(25.0),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: "Tap here, then scan to get Product Details",
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                autofocus: true,
+                focusNode: searchFocus,
+                controller: searchController,
+                textInputAction: TextInputAction.go,
+                onSubmitted: onSubmitted,
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
