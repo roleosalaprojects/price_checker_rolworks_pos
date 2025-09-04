@@ -67,7 +67,7 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
 
   //setTimer to revert back to original state
   void startTimer() {
-    timer = Timer(const Duration(seconds: 10), () {
+    timer = Timer(const Duration(seconds: 6), () {
       setState(() {
         _isEmpty = true;
       });
@@ -76,22 +76,17 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
 
   Widget ProductStatusWidget() {
     if (_isEmpty) {
-      return Align(
+      return const Align(
         alignment: Alignment.center,
-        child: Container(
+        child: SizedBox(
           height: double.maxFinite,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: const Center(
-            child: Padding(
-              padding: EdgeInsets.all(25),
-              child: CustomText(
-                content: "Put the item in the scanner\nto check the price.",
-                fontSize: 40,
-                overFlow: TextOverflow.visible,
-              ),
+          child: Padding(
+            padding: EdgeInsets.all(25),
+            child: CustomText(
+              content: "Scan here\nto check prices.",
+              fontSize: 60,
+              fontWeight: FontWeight.w600,
+              overFlow: TextOverflow.visible,
             ),
           ),
         ),
@@ -106,8 +101,7 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
             shrinkWrap: true,
             itemCount: products.length,
             itemBuilder: (context, index) {
-              if (products.length == 1) {
-              } else if (products.length > 0) {
+              if(products.isNotEmpty){
                 return Padding(
                   padding: EdgeInsets.all(10),
                   child: Container(
@@ -118,13 +112,13 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                     child: ListTile(
                       title: CustomText(
                         content:
-                            "${products[index].name!} - ₱ ${numberFormatter.format(getProductPrice(products[index]))}",
+                        "${products[index].name!} - ₱ ${numberFormatter.format(getProductPrice(products[index]))}",
                         fontSize: 16.0,
                       ),
                     ),
                   ),
                 );
-              } else {
+              }else{
                 return const CustomText(
                   content: "No Data Available",
                   fontSize: 45,
@@ -140,7 +134,7 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
   @override
   void initState() {
     super.initState();
-    focusOnSearch();
+    Future.delayed(const Duration(seconds: 1), (){focusOnSearch();});
     startTimer();
   }
 
@@ -168,14 +162,14 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                   Align(
                     alignment: Alignment.topCenter,
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 10.0, right: 10.0),
+                      padding: const EdgeInsets.only(left: 20.0, right: 10.0),
                       child: ClipRRect(
                         clipBehavior: Clip.hardEdge,
                         borderRadius: BorderRadius.circular(8.0),
                         child: Image.asset(
                           'assets/transparent_store.png',
-                          width: 300.0,
-                          height: 300.0,
+                          width: 200.0,
+                          height: 200.0,
                         ),
                       ),
                     ),
