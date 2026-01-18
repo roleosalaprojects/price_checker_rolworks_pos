@@ -1,27 +1,67 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/theme_controller.dart';
+
 class CustomTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final TextInputAction? textInputAction;
-  final VoidCallback onSubmitted;
+  final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
+  final bool autofocus;
+
   const CustomTextField({
     super.key,
     required this.controller,
     required this.hintText,
     this.textInputAction,
-    required this.onSubmitted,
+    this.onSubmitted,
+    this.focusNode,
+    this.autofocus = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      style: TextStyle(
+        color: ThemeController.getPrimaryTextColor(context),
+      ),
       decoration: InputDecoration(
         hintText: hintText,
-        border: const OutlineInputBorder(),
+        hintStyle: TextStyle(
+          color: ThemeController.getSecondaryTextColor(context),
+        ),
+        filled: true,
+        fillColor: ThemeController.getCardColor(context),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: AppTheme.accentColor,
+            width: 2,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
-      textInputAction: textInputAction,
+      textInputAction: textInputAction ?? TextInputAction.done,
+      onSubmitted: onSubmitted,
     );
   }
 }

@@ -1,42 +1,32 @@
-//Hive Boxes
 import 'package:hive/hive.dart';
 
-import '../services/HTTPService.dart';
+import '../services/http_service.dart';
+import 'theme_controller.dart';
 
-String deviceBox = 'price_checker_settings';
-dynamic hiveBox;
+const String _deviceBoxName = 'price_checker_settings';
+const String _serverAddressKey = 'server_address';
+const String _defaultHost = 'localhost:8080';
 
-void initDevice() async {
-  hiveBox = await Hive.openBox(deviceBox);
-  _initServerIP();
+Box<dynamic>? _hiveBox;
+ThemeController? themeController;
+
+Future<void> initDevice() async {
+  _hiveBox = await Hive.openBox(_deviceBoxName);
+  _loadServerIP();
+  themeController = ThemeController(_hiveBox);
 }
 
-// Get Server IP
-void _initServerIP() {
-  var address = hiveBox.get('server_address');
-  if (address == null || address == '') {
-    // This is the dev server
-    host = 'localhost:8080';
-  } else {
-    // Set Prod server if IP assignment is different.
-    host = address;
-  }
+void _loadServerIP() {
+  final address = _hiveBox?.get(_serverAddressKey);
+  host = (address == null || address.toString().isEmpty) ? _defaultHost : address;
 }
 
-String getServerIP(){
-  var address = hiveBox.get('server_address');
-  if (address == null || address == '') {
-    // This is the dev server
-    host = 'localhost:8080';
-  } else {
-    // Set Prod server if IP assignment is different.
-    host = address;
-  }
-  print(address);
+String getServerIP() {
+  _loadServerIP();
   return host;
 }
 
 void saveServerIP(String hostAddress) {
   host = hostAddress;
-  hiveBox.put('server_address', hostAddress);
+  _hiveBox?.put(_serverAddressKey, hostAddress);
 }
