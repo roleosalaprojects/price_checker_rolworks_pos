@@ -154,10 +154,9 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
       child: Container(
         width: double.maxFinite,
         padding: const EdgeInsets.all(32),
-        child: Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
               Icon(
                 Icons.qr_code_scanner_rounded,
                 size: 64,
@@ -187,7 +186,6 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
             ],
           ),
         ),
-      ),
     );
   }
 
