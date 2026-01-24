@@ -47,7 +47,7 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
 
     try {
       final response = await httpGet('/items/search', {'term': value});
-      final productsJson = response['products'];
+      final productsJson = response['data']['products'];
       products = productsJson
           .map<ProductModel>((e) => ProductModel.fromJson(e))
           .toList();
@@ -157,35 +157,35 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-              Icon(
-                Icons.qr_code_scanner_rounded,
-                size: 64,
-                color: appColor.withValues(alpha: 0.7),
+            Icon(
+              Icons.qr_code_scanner_rounded,
+              size: 64,
+              color: appColor.withValues(alpha: 0.7),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Scan barcode\nto check price',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w600,
+                color: ThemeController.getPrimaryTextColor(context),
+                height: 1.3,
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Scan barcode\nto check price',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w600,
-                  color: ThemeController.getPrimaryTextColor(context),
-                  height: 1.3,
-                ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'or type product name below',
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark
+                    ? AppTheme.darkSecondaryText
+                    : AppTheme.lightSecondaryText,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'or type product name below',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isDark
-                      ? AppTheme.darkSecondaryText
-                      : AppTheme.lightSecondaryText,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
     );
   }
 

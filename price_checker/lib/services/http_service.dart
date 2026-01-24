@@ -15,7 +15,8 @@ class HttpException implements Exception {
   HttpException(this.message, {this.statusCode});
 
   @override
-  String toString() => 'HttpException: $message${statusCode != null ? ' (Status: $statusCode)' : ''}';
+  String toString() =>
+      'HttpException: $message${statusCode != null ? ' (Status: $statusCode)' : ''}';
 }
 
 Future<Map<String, dynamic>> httpGet(
