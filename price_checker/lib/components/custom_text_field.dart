@@ -9,6 +9,7 @@ class CustomTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final FocusNode? focusNode;
   final bool autofocus;
+  final TextInputType? keyboardType;
 
   const CustomTextField({
     super.key,
@@ -18,6 +19,7 @@ class CustomTextField extends StatelessWidget {
     this.onSubmitted,
     this.focusNode,
     this.autofocus = false,
+    this.keyboardType,
   });
 
   @override
@@ -26,6 +28,7 @@ class CustomTextField extends StatelessWidget {
       controller: controller,
       focusNode: focusNode,
       autofocus: autofocus,
+      keyboardType: keyboardType,
       style: TextStyle(
         color: ThemeController.getPrimaryTextColor(context),
       ),

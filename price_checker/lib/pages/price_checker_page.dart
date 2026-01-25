@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:price_checker/pages/attendance/attendance_page.dart';
 import 'package:price_checker/pages/products/product_details_page.dart';
 import 'package:price_checker/services/http_service.dart';
 import 'package:price_checker/services/helpers.dart';
@@ -419,27 +420,60 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                     // Logo card at top left
                     _buildLogoCard(context),
 
-                    // Settings button
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => promptHostDialog(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: ThemeController.getCardColor(context)
-                                .withValues(alpha: 0.8),
+                    // Right side buttons
+                    Row(
+                      children: [
+                        // Attendance button
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.settings_rounded,
-                            color:
-                                ThemeController.getSecondaryTextColor(context),
-                            size: 24,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AttendancePage(),
+                              ),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: ThemeController.getCardColor(context)
+                                    .withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.access_time_rounded,
+                                color:
+                                    ThemeController.getSecondaryTextColor(context),
+                                size: 24,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        // Settings button
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => promptHostDialog(context),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: ThemeController.getCardColor(context)
+                                    .withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.settings_rounded,
+                                color:
+                                    ThemeController.getSecondaryTextColor(context),
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

@@ -45,7 +45,8 @@ void showDialogAlert(BuildContext context, String msg) {
 }
 
 Future<void> promptHostDialog(BuildContext context) {
-  final controller = TextEditingController(text: host);
+  final hostController = TextEditingController(text: host);
+  final storeController = TextEditingController(text: currentStoreId.toString());
   return showDialog(
     context: context,
     builder: (BuildContext subContext) {
@@ -85,11 +86,27 @@ Future<void> promptHostDialog(BuildContext context) {
                   ),
                   const SizedBox(height: 8),
                   CustomTextField(
-                    controller: controller,
+                    controller: hostController,
                     hintText: 'e.g., 192.168.1.100:8080',
                     onSubmitted: (value) {
-                      host = controller.text;
-                      saveServerIP(controller.text);
+                      host = hostController.text;
+                      saveServerIP(hostController.text);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const CustomText(
+                    content: 'Store ID',
+                    fontSize: 14.0,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  const SizedBox(height: 8),
+                  CustomTextField(
+                    controller: storeController,
+                    hintText: 'e.g., 1',
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (value) {
+                      final branchId = int.tryParse(storeController.text) ?? 1;
+                      saveStoreId(branchId);
                     },
                   ),
                   const SizedBox(height: 24),
@@ -159,8 +176,10 @@ Future<void> promptHostDialog(BuildContext context) {
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () {
-                      host = controller.text;
-                      saveServerIP(controller.text);
+                      host = hostController.text;
+                      saveServerIP(hostController.text);
+                      final branchId = int.tryParse(storeController.text) ?? 1;
+                      saveStoreId(branchId);
                       Navigator.pop(context);
                     },
                     child: const Text('Save'),

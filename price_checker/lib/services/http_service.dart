@@ -51,3 +51,40 @@ Future<Map<String, dynamic>> httpGet(
     throw HttpException('Invalid response format from server');
   }
 }
+
+Future<Map<String, dynamic>> httpPost(
+  String route,
+  Map<String, dynamic>? body,
+) async {
+  final url = Uri.http(host, apiRoute + route);
+
+  try {
+    final response = await _client
+        .post(
+          url,
+          headers: {
+            'Content-type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw HttpException('Request timed out'),
+        );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      throw HttpException(
+        errorBody['message'] ?? 'Server returned error',
+        statusCode: response.statusCode,
+      );
+    }
+  } on SocketException {
+    throw HttpException('No internet connection or server unreachable');
+  } on FormatException {
+    throw HttpException('Invalid response format from server');
+  }
+}
