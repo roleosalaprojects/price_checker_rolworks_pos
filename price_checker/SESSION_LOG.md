@@ -132,8 +132,11 @@ lib/
 ## Session History
 
 ### 2026-01-26 (latest)
+- Redesigned attendance page with two-column layout (time | employee info)
+- Left column: Live clock display, Right column: Employee card with status & action
+- Reviewed new attendance spec (late detection, schedules, grace period)
 - Fixed month navigation in attendance history (stored barcode for re-fetching)
-- Fixed RenderFlex overflow in employee state view (wrapped in SingleChildScrollView)
+- Fixed RenderFlex overflow in employee state view
 - Added `parseInt` helper for safe int parsing from API
 - Fixed null safety in all models (AttendanceRecord, Employee, Store, AttendanceSummary)
 - Fixed API field name mismatch (`user_id`/`user` vs `employee_id`/`employee`)
