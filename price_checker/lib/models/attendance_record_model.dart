@@ -6,6 +6,14 @@ double parseDouble(dynamic value) {
   return 0.0;
 }
 
+int parseInt(dynamic value, [int defaultValue = 0]) {
+  if (value == null) return defaultValue;
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? defaultValue;
+  return defaultValue;
+}
+
 class AttendanceRecord {
   final int id;
   final String uuid;
@@ -40,10 +48,10 @@ class AttendanceRecord {
     final employeeData = json['user'] ?? json['employee'];
 
     return AttendanceRecord(
-      id: json['id'],
+      id: parseInt(json['id']),
       uuid: json['uuid'] ?? '',
-      employeeId: json['user_id'] ?? json['employee_id'] ?? 0,
-      storeId: json['store_id'] ?? 0,
+      employeeId: parseInt(json['user_id'] ?? json['employee_id']),
+      storeId: parseInt(json['store_id']),
       date: DateTime.parse(json['date']),
       timeIn: json['time_in'] != null ? DateTime.parse(json['time_in']) : null,
       timeOut:
@@ -91,7 +99,7 @@ class Employee {
 
   factory Employee.fromJson(Map<String, dynamic> json) {
     return Employee(
-      id: json['id'],
+      id: parseInt(json['id']),
       name: json['name'],
       firstName: json['first_name'],
       lastName: json['last_name'],
@@ -118,7 +126,7 @@ class Store {
 
   factory Store.fromJson(Map<String, dynamic> json) {
     return Store(
-      id: json['id'],
+      id: parseInt(json['id']),
       name: json['name'],
     );
   }
@@ -141,10 +149,10 @@ class AttendanceSummary {
 
   factory AttendanceSummary.fromJson(Map<String, dynamic> json) {
     return AttendanceSummary(
-      month: json['month'],
-      year: json['year'],
-      totalDaysPresent: json['total_days_present'] ?? 0,
-      totalDaysAbsent: json['total_days_absent'] ?? 0,
+      month: parseInt(json['month'], 1),
+      year: parseInt(json['year'], DateTime.now().year),
+      totalDaysPresent: parseInt(json['total_days_present']),
+      totalDaysAbsent: parseInt(json['total_days_absent']),
       totalHoursRendered: parseDouble(json['total_hours_rendered']),
     );
   }
