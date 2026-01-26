@@ -1,3 +1,11 @@
+double _parseDouble(dynamic value) {
+  if (value == null) return 0.0;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0.0;
+  return 0.0;
+}
+
 class AttendanceRecord {
   final int id;
   final String uuid;
@@ -37,7 +45,7 @@ class AttendanceRecord {
       timeIn: json['time_in'] != null ? DateTime.parse(json['time_in']) : null,
       timeOut:
           json['time_out'] != null ? DateTime.parse(json['time_out']) : null,
-      hoursRendered: (json['hours_rendered'] ?? 0).toDouble(),
+      hoursRendered: _parseDouble(json['hours_rendered']),
       status: json['status'] ?? 'absent',
       remarks: json['remarks'],
       employee:
@@ -135,7 +143,7 @@ class AttendanceSummary {
       year: json['year'],
       totalDaysPresent: json['total_days_present'] ?? 0,
       totalDaysAbsent: json['total_days_absent'] ?? 0,
-      totalHoursRendered: (json['total_hours_rendered'] ?? 0).toDouble(),
+      totalHoursRendered: _parseDouble(json['total_hours_rendered']),
     );
   }
 }
