@@ -132,6 +132,8 @@ lib/
 ## Session History
 
 ### 2026-01-26
+- Fixed `parseDouble` scope issue - made public for cross-file usage
+- Fixed `hours_rendered` string parsing error in attendance_page.dart
 - Added logger package for error tracking
 - Created log_service.dart with configured logger instances
 - Updated http_service with debug/warning/error logging
