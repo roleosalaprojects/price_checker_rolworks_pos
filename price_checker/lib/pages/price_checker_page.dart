@@ -442,9 +442,9 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
-                                Icons.access_time_rounded,
-                                color:
-                                    ThemeController.getSecondaryTextColor(context),
+                                Icons.calendar_today_outlined,
+                                color: ThemeController.getSecondaryTextColor(
+                                    context),
                                 size: 24,
                               ),
                             ),
@@ -466,8 +466,8 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                               ),
                               child: Icon(
                                 Icons.settings_rounded,
-                                color:
-                                    ThemeController.getSecondaryTextColor(context),
+                                color: ThemeController.getSecondaryTextColor(
+                                    context),
                                 size: 24,
                               ),
                             ),
