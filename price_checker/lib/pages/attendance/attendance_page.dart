@@ -338,94 +338,196 @@ class _AttendancePageState extends State<AttendancePage> {
     final hasTimedIn = _todayRecord?.hasTimedIn ?? false;
     final hasTimedOut = _todayRecord?.hasTimedOut ?? false;
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildTimeDisplay(context),
-            const SizedBox(height: 24),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          // Left column - Time Display
+          Expanded(
+            flex: 1,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildTimeDisplay(context),
+              ],
+            ),
+          ),
 
-            // Employee info card
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 32,
-                      backgroundColor: appColor.withValues(alpha: 0.2),
-                      child: Text(
-                        (_employee?['name'] ?? 'U')[0].toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: appColor,
-                        ),
+          // Divider
+          Container(
+            width: 1,
+            height: 300,
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+          ),
+
+          // Right column - Employee Info & Actions
+          Expanded(
+            flex: 1,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Employee info card
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: appColor.withValues(alpha: 0.2),
+                            child: Text(
+                              (_employee?['name'] ?? 'U')[0].toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: appColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _employee?['name'] ?? 'Unknown Employee',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: ThemeController.getPrimaryTextColor(context),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'ID: ${_employee?['barcode'] ?? '-'}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: ThemeController.getSecondaryTextColor(context),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Today's status inline
+                          if (hasTimedIn) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildStatusItem(
+                                    context,
+                                    'In',
+                                    _todayRecord?.timeIn != null
+                                        ? DateFormat('hh:mm a').format(_todayRecord!.timeIn!)
+                                        : '--:--',
+                                    Colors.green,
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: 36,
+                                    color: Theme.of(context).dividerColor,
+                                  ),
+                                  _buildStatusItem(
+                                    context,
+                                    'Out',
+                                    _todayRecord?.timeOut != null
+                                        ? DateFormat('hh:mm a').format(_todayRecord!.timeOut!)
+                                        : '--:--',
+                                    Colors.red,
+                                  ),
+                                  if (hasTimedOut) ...[
+                                    Container(
+                                      width: 1,
+                                      height: 36,
+                                      color: Theme.of(context).dividerColor,
+                                    ),
+                                    _buildStatusItem(
+                                      context,
+                                      'Hours',
+                                      _todayRecord!.hoursRendered.toStringAsFixed(2),
+                                      appColor,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+
+                          // Action button
+                          if (_isProcessing)
+                            const SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(appColor),
+                              ),
+                            )
+                          else if (!hasTimedIn)
+                            _buildActionButton(
+                              label: 'TIME IN',
+                              icon: Icons.login_rounded,
+                              color: Colors.green,
+                              onPressed: _timeIn,
+                            )
+                          else if (hasTimedIn && !hasTimedOut)
+                            _buildActionButton(
+                              label: 'TIME OUT',
+                              icon: Icons.logout_rounded,
+                              color: Colors.red,
+                              onPressed: _timeOut,
+                            )
+                          else
+                            _buildCompletedBadge(context),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _employee?['name'] ?? 'Unknown Employee',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: ThemeController.getPrimaryTextColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ID: ${_employee?['barcode'] ?? '-'}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: ThemeController.getSecondaryTextColor(context),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 24),
-
-            // Action button
-            if (_isProcessing)
-              const SizedBox(
-                width: 60,
-                height: 60,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(appColor),
-                ),
-              )
-            else if (!hasTimedIn)
-              _buildActionButton(
-                label: 'TIME IN',
-                icon: Icons.login_rounded,
-                color: Colors.green,
-                onPressed: _timeIn,
-              )
-            else if (hasTimedIn && !hasTimedOut)
-              _buildActionButton(
-                label: 'TIME OUT',
-                icon: Icons.logout_rounded,
-                color: Colors.red,
-                onPressed: _timeOut,
-              )
-            else
-              _buildCompletedState(context),
-
-            const SizedBox(height: 16),
-
-            // Today's status
-            if (hasTimedIn) _buildTodayStatusCard(context),
-          ],
-        ),
+  Widget _buildCompletedBadge(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle_rounded,
+            color: Colors.green.shade400,
+            size: 24,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Complete',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.green.shade400,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -461,88 +563,6 @@ class _AttendancePageState extends State<AttendancePage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCompletedState(BuildContext context) {
-    return Column(
-      children: [
-        Icon(
-          Icons.check_circle_rounded,
-          size: 80,
-          color: Colors.green.shade400,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Attendance Complete',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.green.shade400,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'See you tomorrow!',
-          style: TextStyle(
-            fontSize: 16,
-            color: ThemeController.getSecondaryTextColor(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTodayStatusCard(BuildContext context) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildStatusItem(
-              context,
-              'In',
-              _todayRecord?.timeIn != null
-                  ? DateFormat('hh:mm a').format(_todayRecord!.timeIn!)
-                  : '--:--',
-              Colors.green,
-            ),
-            Container(
-              width: 1,
-              height: 40,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              color: Theme.of(context).dividerColor,
-            ),
-            _buildStatusItem(
-              context,
-              'Out',
-              _todayRecord?.timeOut != null
-                  ? DateFormat('hh:mm a').format(_todayRecord!.timeOut!)
-                  : '--:--',
-              Colors.red,
-            ),
-            if (_todayRecord?.hasTimedOut ?? false) ...[
-              Container(
-                width: 1,
-                height: 40,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                color: Theme.of(context).dividerColor,
-              ),
-              _buildStatusItem(
-                context,
-                'Hours',
-                _todayRecord!.hoursRendered.toStringAsFixed(2),
-                appColor,
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
