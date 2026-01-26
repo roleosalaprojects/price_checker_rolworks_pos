@@ -20,6 +20,7 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
   List<AttendanceRecord> _records = [];
   AttendanceSummary? _summary;
   Map<String, dynamic>? _employee;
+  String? _currentBarcode;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -44,6 +45,8 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
 
   Future<void> _onBarcodeSubmitted(String barcode) async {
     if (barcode.isEmpty) return;
+
+    _currentBarcode = barcode;
 
     setState(() {
       _isLoading = true;
@@ -98,16 +101,26 @@ class _AttendanceHistoryPageState extends State<AttendanceHistoryPage> {
     }
   }
 
-  void _changeMonth(int delta) {
+  Future<void> _changeMonth(int delta) async {
+    if (_currentBarcode == null) return;
+
     setState(() {
       _selectedMonth = DateTime(
         _selectedMonth.year,
         _selectedMonth.month + delta,
         1,
       );
+      _isLoading = true;
     });
-    if (_employee != null) {
-      _onBarcodeSubmitted(_employee!['barcode']);
+
+    try {
+      await _fetchData(_currentBarcode!);
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('HttpException: ', '');
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
