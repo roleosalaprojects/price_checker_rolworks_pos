@@ -36,11 +36,14 @@ class AttendanceRecord {
   });
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) {
+    // Handle both user_id and employee_id from API
+    final employeeData = json['user'] ?? json['employee'];
+
     return AttendanceRecord(
       id: json['id'],
       uuid: json['uuid'] ?? '',
-      employeeId: json['employee_id'],
-      storeId: json['store_id'],
+      employeeId: json['user_id'] ?? json['employee_id'] ?? 0,
+      storeId: json['store_id'] ?? 0,
       date: DateTime.parse(json['date']),
       timeIn: json['time_in'] != null ? DateTime.parse(json['time_in']) : null,
       timeOut:
@@ -48,8 +51,7 @@ class AttendanceRecord {
       hoursRendered: parseDouble(json['hours_rendered']),
       status: json['status'] ?? 'absent',
       remarks: json['remarks'],
-      employee:
-          json['employee'] != null ? Employee.fromJson(json['employee']) : null,
+      employee: employeeData != null ? Employee.fromJson(employeeData) : null,
       store: json['store'] != null ? Store.fromJson(json['store']) : null,
     );
   }
