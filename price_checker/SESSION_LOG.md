@@ -131,9 +131,16 @@ lib/
 
 ## Session History
 
-### 2026-01-26
+### 2026-01-26 (latest)
+- Fixed month navigation in attendance history (stored barcode for re-fetching)
+- Fixed RenderFlex overflow in employee state view (wrapped in SingleChildScrollView)
+- Added `parseInt` helper for safe int parsing from API
+- Fixed null safety in all models (AttendanceRecord, Employee, Store, AttendanceSummary)
+- Fixed API field name mismatch (`user_id`/`user` vs `employee_id`/`employee`)
 - Fixed `parseDouble` scope issue - made public for cross-file usage
 - Fixed `hours_rendered` string parsing error in attendance_page.dart
+
+### 2026-01-26
 - Added logger package for error tracking
 - Created log_service.dart with configured logger instances
 - Updated http_service with debug/warning/error logging
