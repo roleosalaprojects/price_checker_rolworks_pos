@@ -80,7 +80,7 @@ class _AttendancePageState extends State<AttendancePage> {
             timeOut: todayStatus['time_out'] != null
                 ? DateFormat('hh:mm a').parse(todayStatus['time_out'])
                 : null,
-            hoursRendered: (todayStatus['hours_rendered'] ?? 0).toDouble(),
+            hoursRendered: parseDouble(todayStatus['hours_rendered']),
             status: todayStatus['has_timed_in'] == true ? 'present' : 'absent',
           );
         } else {

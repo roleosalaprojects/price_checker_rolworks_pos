@@ -40,7 +40,8 @@ Future<Map<String, dynamic>> httpGet(
       onTimeout: () => throw HttpException('Request timed out'),
     );
 
-    logger.d('Response [${response.statusCode}]: ${response.body.length} bytes');
+    logger
+        .d('Response [${response.statusCode}]: ${response.body.length} bytes');
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body) as Map<String, dynamic>;

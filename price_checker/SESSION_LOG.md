@@ -132,6 +132,9 @@ lib/
 ## Session History
 
 ### 2026-01-26
+- Added logger package for error tracking
+- Created log_service.dart with configured logger instances
+- Updated http_service with debug/warning/error logging
 - Fixed `branch_id` → `store_id` (table is `stores`, not `branches`)
 - Updated all models, controllers, and API calls
 
