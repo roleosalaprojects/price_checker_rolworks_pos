@@ -47,6 +47,9 @@ void showDialogAlert(BuildContext context, String msg) {
 Future<void> promptHostDialog(BuildContext context) {
   final hostController = TextEditingController(text: host);
   final storeController = TextEditingController(text: currentStoreId.toString());
+  final sidecarController =
+      TextEditingController(text: fingerprintSidecarPath);
+  bool fpEnabled = fingerprintEnabled;
   return showDialog(
     context: context,
     builder: (BuildContext subContext) {
@@ -109,6 +112,32 @@ Future<void> promptHostDialog(BuildContext context) {
                       saveStoreId(branchId);
                     },
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: CustomText(
+                          content: 'Fingerprint Attendance',
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Switch(
+                        value: fpEnabled,
+                        activeThumbColor: appColor,
+                        onChanged: (value) {
+                          setDialogState(() => fpEnabled = value);
+                        },
+                      ),
+                    ],
+                  ),
+                  if (fpEnabled) ...[
+                    const SizedBox(height: 8),
+                    CustomTextField(
+                      controller: sidecarController,
+                      hintText: 'Sidecar path (optional, auto-detected)',
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const CustomText(
                     content: 'Theme',
@@ -180,6 +209,8 @@ Future<void> promptHostDialog(BuildContext context) {
                       saveServerIP(hostController.text);
                       final branchId = int.tryParse(storeController.text) ?? 1;
                       saveStoreId(branchId);
+                      saveFingerprintEnabled(fpEnabled);
+                      saveFingerprintSidecarPath(sidecarController.text.trim());
                       Navigator.pop(context);
                     },
                     child: const Text('Save'),

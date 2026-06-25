@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -6,6 +8,7 @@ import '../../controllers/main_controller.dart';
 import '../../controllers/price_checker_page_controller.dart';
 import '../../controllers/theme_controller.dart';
 import '../../models/attendance_record_model.dart';
+import '../../services/fingerprint_service.dart';
 import '../../services/http_service.dart';
 import 'attendance_history_page.dart';
 
@@ -26,17 +29,140 @@ class _AttendancePageState extends State<AttendancePage> {
   bool _isProcessing = false;
   String? _errorMessage;
 
+  // Fingerprint (optional; barcode remains the fallback).
+  FingerprintService? _fingerprint;
+  FingerprintStatus _fpStatus = FingerprintStatus.unavailable;
+  StreamSubscription<FingerprintStatus>? _fpStatusSub;
+  StreamSubscription<FingerprintCapture>? _fpCaptureSub;
+  StreamSubscription<String>? _fpErrorSub;
+  bool _fpProcessing = false;
+
   @override
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 500), () => _focusOnBarcode());
+    _initFingerprint();
   }
 
   @override
   void dispose() {
     _barcodeController.dispose();
     _barcodeFocus.dispose();
+    _fpStatusSub?.cancel();
+    _fpCaptureSub?.cancel();
+    _fpErrorSub?.cancel();
+    _fingerprint?.dispose();
     super.dispose();
+  }
+
+  void _initFingerprint() {
+    if (!fingerprintEnabled || !FingerprintService.isSupportedPlatform) return;
+
+    final service = FingerprintService();
+    _fingerprint = service;
+
+    _fpStatusSub = service.statusStream.listen((status) {
+      if (!mounted) return;
+      setState(() => _fpStatus = status);
+      // Resume the "waiting for finger" loop whenever the reader goes idle.
+      if (status == FingerprintStatus.ready) _armFingerprint();
+    });
+
+    _fpCaptureSub = service.captureStream.listen(_onFingerprintCaptured);
+
+    _fpErrorSub = service.errorStream.listen((message) {
+      // Transient capture errors (timeout/low quality) just re-arm silently.
+      _armFingerprint();
+    });
+
+    service.start(
+      sidecarPathOverride:
+          fingerprintSidecarPath.isEmpty ? null : fingerprintSidecarPath,
+    );
+  }
+
+  /// Re-arm a fingerprint capture if the reader is idle and no employee is
+  /// currently being shown.
+  void _armFingerprint() {
+    final service = _fingerprint;
+    if (service == null) return;
+    if (_employee != null || _isLoading || _fpProcessing) return;
+    if (service.status != FingerprintStatus.ready) return;
+    service.capture(mode: 'identify');
+  }
+
+  Future<void> _onFingerprintCaptured(FingerprintCapture capture) async {
+    // Ignore stray captures while an employee card is already on screen.
+    if (!mounted || _employee != null || _isLoading || _fpProcessing) return;
+
+    setState(() {
+      _fpProcessing = true;
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await httpPost('/v1/attendance/identify', {
+        'template': capture.template,
+        'format': capture.format,
+      });
+      _applyLookupResponse(response);
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('HttpException: ', '');
+      _employee = null;
+      _todayRecord = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _fpProcessing = false;
+      });
+    }
+
+    // Not recognized → clear the transient message and keep scanning.
+    if (_employee == null) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _employee == null) {
+          setState(() => _errorMessage = null);
+          _armFingerprint();
+        }
+      });
+    }
+  }
+
+  /// Populate employee + today's status from a lookup/identify response. Shared
+  /// by the barcode and fingerprint paths so both behave identically.
+  void _applyLookupResponse(Map<String, dynamic> response) {
+    if (response['success'] == true) {
+      _employee = response['data']['employee'];
+      final todayStatus = response['data']['today_status'];
+
+      if (todayStatus != null) {
+        _todayRecord = AttendanceRecord(
+          id: 0,
+          uuid: '',
+          employeeId: _employee!['id'],
+          storeId: currentStoreId,
+          date: DateTime.now(),
+          timeIn: todayStatus['time_in'] != null
+              ? DateFormat('hh:mm a').parse(todayStatus['time_in'])
+              : null,
+          timeOut: todayStatus['time_out'] != null
+              ? DateFormat('hh:mm a').parse(todayStatus['time_out'])
+              : null,
+          hoursRendered: parseDouble(todayStatus['hours_rendered']),
+          status: todayStatus['has_timed_in'] == true ? 'present' : 'absent',
+        );
+      } else {
+        _todayRecord = null;
+      }
+      _errorMessage = null;
+    } else {
+      _errorMessage = response['message'] ?? 'Employee not found';
+      _employee = null;
+      _todayRecord = null;
+    }
   }
 
   void _focusOnBarcode() {
@@ -49,6 +175,8 @@ class _AttendancePageState extends State<AttendancePage> {
       _employee = null;
       _errorMessage = null;
     });
+    // Resume fingerprint scanning once the screen returns to idle.
+    _armFingerprint();
   }
 
   Future<void> _onBarcodeSubmitted(String barcode) async {
@@ -61,36 +189,7 @@ class _AttendancePageState extends State<AttendancePage> {
 
     try {
       final response = await httpGet('/v1/attendance/lookup', {'barcode': barcode});
-
-      if (response['success'] == true) {
-        _employee = response['data']['employee'];
-        final todayStatus = response['data']['today_status'];
-
-        if (todayStatus != null) {
-          // Build a minimal attendance record from the status
-          _todayRecord = AttendanceRecord(
-            id: 0,
-            uuid: '',
-            employeeId: _employee!['id'],
-            storeId: currentStoreId,
-            date: DateTime.now(),
-            timeIn: todayStatus['time_in'] != null
-                ? DateFormat('hh:mm a').parse(todayStatus['time_in'])
-                : null,
-            timeOut: todayStatus['time_out'] != null
-                ? DateFormat('hh:mm a').parse(todayStatus['time_out'])
-                : null,
-            hoursRendered: parseDouble(todayStatus['hours_rendered']),
-            status: todayStatus['has_timed_in'] == true ? 'present' : 'absent',
-          );
-        } else {
-          _todayRecord = null;
-        }
-      } else {
-        _errorMessage = response['message'] ?? 'Employee not found';
-        _employee = null;
-        _todayRecord = null;
-      }
+      _applyLookupResponse(response);
     } catch (e) {
       _errorMessage = e.toString().replaceAll('HttpException: ', '');
       _employee = null;
@@ -235,19 +334,25 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   Widget _buildIdleState(BuildContext context) {
+    final fpReady = _fpStatus == FingerprintStatus.ready ||
+        _fpStatus == FingerprintStatus.scanning;
+    final scanning = _fpStatus == FingerprintStatus.scanning;
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildTimeDisplay(context),
         const SizedBox(height: 48),
         Icon(
-          Icons.badge_outlined,
+          scanning ? Icons.fingerprint : Icons.badge_outlined,
           size: 80,
-          color: appColor.withValues(alpha: 0.6),
+          color: scanning ? Colors.green : appColor.withValues(alpha: 0.6),
         ),
         const SizedBox(height: 24),
         Text(
-          'Scan your ID barcode',
+          scanning
+              ? 'Reading fingerprint…'
+              : (fpReady ? 'Place finger or scan ID' : 'Scan your ID barcode'),
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w600,
@@ -262,7 +367,69 @@ class _AttendancePageState extends State<AttendancePage> {
             color: ThemeController.getSecondaryTextColor(context),
           ),
         ),
+        if (_fingerprint != null) ...[
+          const SizedBox(height: 24),
+          _buildFingerprintChip(context),
+        ],
       ],
+    );
+  }
+
+  /// Small status pill reflecting the fingerprint reader state.
+  Widget _buildFingerprintChip(BuildContext context) {
+    late final IconData icon;
+    late final String label;
+    late final Color color;
+
+    switch (_fpStatus) {
+      case FingerprintStatus.ready:
+        icon = Icons.fingerprint;
+        label = 'Fingerprint reader ready';
+        color = Colors.green;
+        break;
+      case FingerprintStatus.scanning:
+        icon = Icons.fingerprint;
+        label = 'Reading…';
+        color = Colors.green;
+        break;
+      case FingerprintStatus.starting:
+        icon = Icons.hourglass_empty_rounded;
+        label = 'Starting reader…';
+        color = ThemeController.getSecondaryTextColor(context);
+        break;
+      case FingerprintStatus.noDevice:
+        icon = Icons.usb_off_rounded;
+        label = 'Reader not detected';
+        color = Colors.orange;
+        break;
+      case FingerprintStatus.unavailable:
+        icon = Icons.fingerprint_outlined;
+        label = 'Fingerprint unavailable';
+        color = ThemeController.getSecondaryTextColor(context);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
