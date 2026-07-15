@@ -18,9 +18,12 @@ sidecar sources.
   `http://{host}/{image}`), `GET /v1/attendance/lookup?barcode=`,
   `POST /v1/attendance/time-in|time-out`, `GET /v1/attendance/history|summary`,
   `POST /v1/attendance/identify` (fingerprint).
-- **KNOWN GAP (2026-07-12):** `POST /api/desktop/v1/attendance/identify` does
-  NOT exist in the backend yet — the `feature/fingerprint-attendance` branch
-  depends on adding it before shipping.
+- **KNOWN GAP (work started 2026-07-15):** `POST /api/desktop/v1/attendance/identify`
+  does not exist on the backend's `dev` yet. Backend branch
+  `feature/desktop-attendance-identify` has the started work (fingerprint
+  storage migration + model); the contract and remaining steps are in
+  `../apex_backend/development/specs/desktop_fingerprint_identify_wip.md`.
+  Finish that branch before shipping `feature/fingerprint-attendance`.
 - Config in Hive box `price_checker_settings`: `server_address`
   (default `localhost:8080`), `store_id` (default 1), fingerprint settings —
   editable via the in-app settings dialog.
