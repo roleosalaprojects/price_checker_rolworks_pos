@@ -1,3 +1,9 @@
+> **Superseded 2026-11-25.** Built differently: matching on the kiosk (the
+> reader program scores with NIST bozorth3), prints enrolled on a POS and
+> served sealed to registered terminals, punches signed by the terminal. See
+> `../apex_backend/development/specs/apex_fingerprint_spec.md` and the root
+> `CLAUDE.md`. Kept for the record.
+
 # Fingerprint Attendance — Design & Contract Spec
 
 Status: **DRAFT / exploratory** (branch `feature/fingerprint-attendance` in both

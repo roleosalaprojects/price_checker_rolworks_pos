@@ -10,6 +10,7 @@ class CustomTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   final TextInputType? keyboardType;
+  final bool obscureText;
 
   const CustomTextField({
     super.key,
@@ -20,6 +21,7 @@ class CustomTextField extends StatelessWidget {
     this.focusNode,
     this.autofocus = false,
     this.keyboardType,
+    this.obscureText = false,
   });
 
   @override
@@ -29,6 +31,7 @@ class CustomTextField extends StatelessWidget {
       focusNode: focusNode,
       autofocus: autofocus,
       keyboardType: keyboardType,
+      obscureText: obscureText,
       style: TextStyle(
         color: ThemeController.getPrimaryTextColor(context),
       ),

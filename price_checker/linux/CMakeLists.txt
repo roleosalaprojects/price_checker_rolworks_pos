@@ -137,3 +137,17 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# The fingerprint reader program (native/apex_fingerprint, a copy of the POS
+# repo's), installed next to the app. Optional: built only where
+# libfprint-2-dev and libjson-glib-dev are installed.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(APEX_FINGERPRINT_DEPS QUIET libfprint-2 json-glib-1.0)
+if(APEX_FINGERPRINT_DEPS_FOUND)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../native/apex_fingerprint"
+                   "${CMAKE_BINARY_DIR}/apex_fingerprint")
+  install(TARGETS apex_fingerprint RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+else()
+  message(WARNING "libfprint-2 / json-glib not found: building without apex_fingerprint")
+endif()

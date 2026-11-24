@@ -8,7 +8,8 @@ import '../../controllers/main_controller.dart';
 import '../../controllers/price_checker_page_controller.dart';
 import '../../controllers/theme_controller.dart';
 import '../../models/attendance_record_model.dart';
-import '../../services/fingerprint_service.dart';
+import '../../services/fingerprint/kiosk_terminal.dart';
+import '../../services/fingerprint/reader.dart';
 import '../../services/http_service.dart';
 import 'attendance_history_page.dart';
 
@@ -29,106 +30,107 @@ class _AttendancePageState extends State<AttendancePage> {
   bool _isProcessing = false;
   String? _errorMessage;
 
-  // Fingerprint (optional; barcode remains the fallback).
-  FingerprintService? _fingerprint;
-  FingerprintStatus _fpStatus = FingerprintStatus.unavailable;
-  StreamSubscription<FingerprintStatus>? _fpStatusSub;
-  StreamSubscription<FingerprintCapture>? _fpCaptureSub;
-  StreamSubscription<String>? _fpErrorSub;
-  bool _fpProcessing = false;
+  // Fingerprint (2026-11-25): tap, then a finger. The reader is armed on a
+  // tap only (libfprint stops a reader left waiting ~4 min); the barcode
+  // stays (refused by the server once the store switches it off).
+  bool _fpScanning = false;
+  String _fpLine = '';
+
+  bool get _fpReady =>
+      fingerprintEnabled &&
+      FingerprintReader.instance.supported &&
+      KioskTerminal.registered &&
+      KioskTerminal.prints.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 500), () => _focusOnBarcode());
-    _initFingerprint();
+    if (fingerprintEnabled && FingerprintReader.instance.supported && KioskTerminal.registered) {
+      FingerprintReader.instance.ensureStarted().then((_) async {
+        await KioskTerminal.refreshGallery();
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
   void dispose() {
     _barcodeController.dispose();
     _barcodeFocus.dispose();
-    _fpStatusSub?.cancel();
-    _fpCaptureSub?.cancel();
-    _fpErrorSub?.cancel();
-    _fingerprint?.dispose();
+    if (_fpScanning) FingerprintReader.instance.cancel();
     super.dispose();
   }
 
-  void _initFingerprint() {
-    if (!fingerprintEnabled || !FingerprintService.isSupportedPlatform) return;
-
-    final service = FingerprintService();
-    _fingerprint = service;
-
-    _fpStatusSub = service.statusStream.listen((status) {
-      if (!mounted) return;
-      setState(() => _fpStatus = status);
-      // Resume the "waiting for finger" loop whenever the reader goes idle.
-      if (status == FingerprintStatus.ready) _armFingerprint();
-    });
-
-    _fpCaptureSub = service.captureStream.listen(_onFingerprintCaptured);
-
-    _fpErrorSub = service.errorStream.listen((message) {
-      // Transient capture errors (timeout/low quality) just re-arm silently.
-      _armFingerprint();
-    });
-
-    service.start(
-      sidecarPathOverride:
-          fingerprintSidecarPath.isEmpty ? null : fingerprintSidecarPath,
-    );
-  }
-
-  /// Re-arm a fingerprint capture if the reader is idle and no employee is
-  /// currently being shown.
-  void _armFingerprint() {
-    final service = _fingerprint;
-    if (service == null) return;
-    if (_employee != null || _isLoading || _fpProcessing) return;
-    if (service.status != FingerprintStatus.ready) return;
-    service.capture(mode: 'identify');
-  }
-
-  Future<void> _onFingerprintCaptured(FingerprintCapture capture) async {
-    // Ignore stray captures while an employee card is already on screen.
-    if (!mounted || _employee != null || _isLoading || _fpProcessing) return;
-
+  Future<void> _scanFinger() async {
     setState(() {
-      _fpProcessing = true;
-      _isLoading = true;
+      _fpScanning = true;
+      _fpLine = 'Getting the reader ready…';
       _errorMessage = null;
     });
-
-    try {
-      final response = await httpPost('/v1/attendance/identify', {
-        'template': capture.template,
-        'format': capture.format,
-      });
-      _applyLookupResponse(response);
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('HttpException: ', '');
-      _employee = null;
-      _todayRecord = null;
-    }
-
-    if (mounted) {
+    await KioskTerminal.refreshGallery();
+    final ReaderResult result = await FingerprintReader.instance.scan(onProgress: (e) {
+      if (!mounted) return;
       setState(() {
-        _isLoading = false;
-        _fpProcessing = false;
+        _fpLine = switch (e['event']) {
+          'waiting' => 'Place your finger on the reader',
+          'retry' => 'Press again — hold the finger flat and still',
+          'paused' => 'Too many fingers not recognised: wait ${e['seconds']} seconds',
+          _ => _fpLine,
+        };
       });
+    });
+    if (!mounted) return;
+    final KioskPrint? who = result.isMatch ? KioskTerminal.byPrint(result.printId) : null;
+    if (who == null) {
+      setState(() {
+        _fpScanning = false;
+        _errorMessage = result.event == 'cancelled' ? null : (result.problem ?? 'Not recognised.');
+      });
+      if (_errorMessage != null) {
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted && _employee == null) setState(() => _errorMessage = null);
+        });
+      }
+      return;
     }
+    setState(() => _isLoading = true);
+    final Map<String, dynamic>? today = await KioskTerminal.today(who.userId);
+    if (!mounted) return;
+    setState(() {
+      _fpScanning = false;
+      _isLoading = false;
+      _applyLookupResponse({
+        'success': true,
+        'data': {
+          'employee': {'id': int.tryParse(who.userId) ?? 0, 'name': who.name, 'barcode': null, 'finger': who},
+          'today_status': today,
+        },
+      });
+    });
+  }
 
-    // Not recognized → clear the transient message and keep scanning.
-    if (_employee == null) {
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted && _employee == null) {
-          setState(() => _errorMessage = null);
-          _armFingerprint();
-        }
-      });
+  Future<void> _cancelScan() async {
+    await FingerprintReader.instance.cancel();
+    if (mounted) setState(() => _fpScanning = false);
+  }
+
+  /// A punch by the finger that matched (signed by this kiosk).
+  Future<void> _punchByFinger(KioskPrint who, String action) async {
+    final Map<String, dynamic> response = await KioskTerminal.punch(who: who, action: action);
+    final bool ok = response['success'] == true;
+    if (ok && response['data'] is Map && response['data']['attendance'] is Map) {
+      _todayRecord = AttendanceRecord.fromJson(Map<String, dynamic>.from(response['data']['attendance']));
     }
+    if (!mounted) return;
+    showSnack(
+      customSnack(
+        ok ? (action == 'in' ? 'Time-In Recorded' : 'Time-Out Recorded') : 'Not Recorded',
+        '${response['message'] ?? (ok ? 'Done.' : 'The server refused the punch.')}',
+        ok ? ContentType.success : ContentType.failure,
+      ),
+      context,
+    );
   }
 
   /// Populate employee + today's status from a lookup/identify response. Shared
@@ -175,8 +177,6 @@ class _AttendancePageState extends State<AttendancePage> {
       _employee = null;
       _errorMessage = null;
     });
-    // Resume fingerprint scanning once the screen returns to idle.
-    _armFingerprint();
   }
 
   Future<void> _onBarcodeSubmitted(String barcode) async {
@@ -208,6 +208,15 @@ class _AttendancePageState extends State<AttendancePage> {
     if (_employee == null) return;
 
     setState(() => _isProcessing = true);
+
+    if (_employee!['finger'] is KioskPrint) {
+      await _punchByFinger(_employee!['finger'] as KioskPrint, 'in');
+      if (mounted) setState(() => _isProcessing = false);
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _clearState();
+      });
+      return;
+    }
 
     try {
       final response = await httpPost('/v1/attendance/time-in', {
@@ -258,6 +267,15 @@ class _AttendancePageState extends State<AttendancePage> {
     if (_employee == null) return;
 
     setState(() => _isProcessing = true);
+
+    if (_employee!['finger'] is KioskPrint) {
+      await _punchByFinger(_employee!['finger'] as KioskPrint, 'out');
+      if (mounted) setState(() => _isProcessing = false);
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _clearState();
+      });
+      return;
+    }
 
     try {
       final response = await httpPost('/v1/attendance/time-out', {
@@ -334,102 +352,67 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   Widget _buildIdleState(BuildContext context) {
-    final fpReady = _fpStatus == FingerprintStatus.ready ||
-        _fpStatus == FingerprintStatus.scanning;
-    final scanning = _fpStatus == FingerprintStatus.scanning;
-
+    if (_fpScanning) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.fingerprint, size: 120, color: Colors.green),
+          const SizedBox(height: 24),
+          Text(
+            _fpLine,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: ThemeController.getPrimaryTextColor(context)),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: 220,
+            height: 56,
+            child: OutlinedButton(onPressed: _cancelScan, child: const Text('Cancel', style: TextStyle(fontSize: 18))),
+          ),
+        ],
+      );
+    }
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildTimeDisplay(context),
         const SizedBox(height: 48),
-        Icon(
-          scanning ? Icons.fingerprint : Icons.badge_outlined,
-          size: 80,
-          color: scanning ? Colors.green : appColor.withValues(alpha: 0.6),
-        ),
+        Icon(Icons.badge_outlined, size: 80, color: appColor.withValues(alpha: 0.6)),
         const SizedBox(height: 24),
         Text(
-          scanning
-              ? 'Reading fingerprint…'
-              : (fpReady ? 'Place finger or scan ID' : 'Scan your ID barcode'),
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            color: ThemeController.getPrimaryTextColor(context),
-          ),
+          _fpReady ? 'Tap Fingerprint, or scan your ID' : 'Scan your ID barcode',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: ThemeController.getPrimaryTextColor(context)),
         ),
         const SizedBox(height: 8),
         Text(
           'to clock in or out',
-          style: TextStyle(
-            fontSize: 16,
-            color: ThemeController.getSecondaryTextColor(context),
-          ),
+          style: TextStyle(fontSize: 16, color: ThemeController.getSecondaryTextColor(context)),
         ),
-        if (_fingerprint != null) ...[
+        if (_fpReady) ...[
+          const SizedBox(height: 28),
+          SizedBox(
+            width: 320,
+            height: 72,
+            child: ElevatedButton.icon(
+              key: const ValueKey('kiosk-fingerprint'),
+              onPressed: _scanFinger,
+              icon: const Icon(Icons.fingerprint, size: 36),
+              label: const Text('Fingerprint', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ] else if (fingerprintEnabled && FingerprintReader.instance.supported) ...[
           const SizedBox(height: 24),
-          _buildFingerprintChip(context),
-        ],
-      ],
-    );
-  }
-
-  /// Small status pill reflecting the fingerprint reader state.
-  Widget _buildFingerprintChip(BuildContext context) {
-    late final IconData icon;
-    late final String label;
-    late final Color color;
-
-    switch (_fpStatus) {
-      case FingerprintStatus.ready:
-        icon = Icons.fingerprint;
-        label = 'Fingerprint reader ready';
-        color = Colors.green;
-        break;
-      case FingerprintStatus.scanning:
-        icon = Icons.fingerprint;
-        label = 'Reading…';
-        color = Colors.green;
-        break;
-      case FingerprintStatus.starting:
-        icon = Icons.hourglass_empty_rounded;
-        label = 'Starting reader…';
-        color = ThemeController.getSecondaryTextColor(context);
-        break;
-      case FingerprintStatus.noDevice:
-        icon = Icons.usb_off_rounded;
-        label = 'Reader not detected';
-        color = Colors.orange;
-        break;
-      case FingerprintStatus.unavailable:
-        icon = Icons.fingerprint_outlined;
-        label = 'Fingerprint unavailable';
-        color = ThemeController.getSecondaryTextColor(context);
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: color,
+          ValueListenableBuilder<ReaderStatus>(
+            valueListenable: FingerprintReader.instance.status,
+            builder: (context, status, _) => Text(
+              !KioskTerminal.registered
+                  ? 'Fingerprint: not set up (Settings → Register this kiosk)'
+                  : (status.problem ?? 'Fingerprint: no one enrolled yet'),
+              style: TextStyle(fontSize: 14, color: ThemeController.getSecondaryTextColor(context)),
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -569,7 +552,7 @@ class _AttendancePageState extends State<AttendancePage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'ID: ${_employee?['barcode'] ?? '-'}',
+                            _employee?['finger'] != null ? 'Fingerprint' : 'ID: ${_employee?['barcode'] ?? '-'}',
                             style: TextStyle(
                               fontSize: 14,
                               color: ThemeController.getSecondaryTextColor(context),

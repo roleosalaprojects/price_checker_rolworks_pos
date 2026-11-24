@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 
+import '../services/fingerprint/kiosk_terminal.dart';
 import '../services/http_service.dart';
 import 'theme_controller.dart';
 
@@ -21,6 +22,8 @@ String fingerprintSidecarPath = '';
 
 Future<void> initDevice() async {
   _hiveBox = await Hive.openBox(_deviceBoxName);
+  // Fingerprints (2026-11-25): this kiosk's registration.
+  await KioskTerminal.load();
   _loadServerIP();
   _loadStoreId();
   _loadFingerprintSettings();
@@ -37,6 +40,9 @@ void saveFingerprintEnabled(bool enabled) {
   fingerprintEnabled = enabled;
   _hiveBox?.put(_fingerprintEnabledKey, enabled);
 }
+
+/// This kiosk's id for its fingerprint registration (made once).
+String kioskDeviceUuid() => KioskTerminal.deviceUuid(_hiveBox);
 
 void saveFingerprintSidecarPath(String path) {
   fingerprintSidecarPath = path;
