@@ -1,11 +1,14 @@
 import 'package:hive/hive.dart';
 
+import '../services/fingerprint/kiosk_terminal.dart';
 import '../services/http_service.dart';
 import 'theme_controller.dart';
 
 const String _deviceBoxName = 'price_checker_settings';
 const String _serverAddressKey = 'server_address';
 const String _storeIdKey = 'store_id';
+const String _fingerprintEnabledKey = 'fingerprint_enabled';
+const String _fingerprintSidecarPathKey = 'fingerprint_sidecar_path';
 const String _defaultHost = 'localhost:8080';
 const int _defaultStoreId = 1;
 
@@ -13,11 +16,37 @@ Box<dynamic>? _hiveBox;
 ThemeController? themeController;
 int currentStoreId = _defaultStoreId;
 
+// Fingerprint attendance settings.
+bool fingerprintEnabled = true;
+String fingerprintSidecarPath = '';
+
 Future<void> initDevice() async {
   _hiveBox = await Hive.openBox(_deviceBoxName);
+  // Fingerprints (2026-11-25): this kiosk's registration.
+  await KioskTerminal.load();
   _loadServerIP();
   _loadStoreId();
+  _loadFingerprintSettings();
   themeController = ThemeController(_hiveBox);
+}
+
+void _loadFingerprintSettings() {
+  fingerprintEnabled = _hiveBox?.get(_fingerprintEnabledKey) ?? true;
+  fingerprintSidecarPath =
+      (_hiveBox?.get(_fingerprintSidecarPathKey) ?? '').toString();
+}
+
+void saveFingerprintEnabled(bool enabled) {
+  fingerprintEnabled = enabled;
+  _hiveBox?.put(_fingerprintEnabledKey, enabled);
+}
+
+/// This kiosk's id for its fingerprint registration (made once).
+String kioskDeviceUuid() => KioskTerminal.deviceUuid(_hiveBox);
+
+void saveFingerprintSidecarPath(String path) {
+  fingerprintSidecarPath = path;
+  _hiveBox?.put(_fingerprintSidecarPathKey, path);
 }
 
 void _loadServerIP() {

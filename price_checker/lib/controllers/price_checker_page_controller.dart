@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../services/fingerprint/kiosk_terminal.dart';
 import 'package:price_checker/components/custom_text_field.dart';
 import 'package:price_checker/controllers/main_controller.dart';
 
@@ -47,6 +49,13 @@ void showDialogAlert(BuildContext context, String msg) {
 Future<void> promptHostDialog(BuildContext context) {
   final hostController = TextEditingController(text: host);
   final storeController = TextEditingController(text: currentStoreId.toString());
+  final managerEmail = TextEditingController();
+  final managerPassword = TextEditingController();
+  bool fpEnabled = fingerprintEnabled;
+  bool registering = false;
+  String? fpMessage = KioskTerminal.registered
+      ? 'Registered as ${KioskTerminal.name ?? 'this kiosk'}.'
+      : 'Not registered: a manager with the Fingerprints switch registers it once.';
   return showDialog(
     context: context,
     builder: (BuildContext subContext) {
@@ -109,6 +118,73 @@ Future<void> promptHostDialog(BuildContext context) {
                       saveStoreId(branchId);
                     },
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: CustomText(
+                          content: 'Fingerprint Attendance',
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Switch(
+                        value: fpEnabled,
+                        activeThumbColor: appColor,
+                        onChanged: (value) {
+                          setDialogState(() => fpEnabled = value);
+                        },
+                      ),
+                    ],
+                  ),
+                  if (fpEnabled) ...[
+                    const SizedBox(height: 4),
+                    CustomText(content: fpMessage ?? '', fontSize: 13.0),
+                    const SizedBox(height: 8),
+                    CustomTextField(controller: managerEmail, hintText: 'Manager e-mail'),
+                    const SizedBox(height: 8),
+                    CustomTextField(controller: managerPassword, hintText: 'Password', obscureText: true),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: registering
+                            ? null
+                            : () async {
+                                // The store and server typed above are the kiosk's.
+                                host = hostController.text;
+                                saveServerIP(hostController.text);
+                                final int storeId = int.tryParse(storeController.text) ?? currentStoreId;
+                                saveStoreId(storeId);
+                                setDialogState(() => registering = true);
+                                Map<String, dynamic> answer = await KioskTerminal.register(
+                                  email: managerEmail.text,
+                                  password: managerPassword.text,
+                                  deviceUuid: kioskDeviceUuid(),
+                                  storeId: storeId,
+                                );
+                                if (answer['code'] == 'replace_needed') {
+                                  answer = await KioskTerminal.register(
+                                    email: managerEmail.text,
+                                    password: managerPassword.text,
+                                    deviceUuid: kioskDeviceUuid(),
+                                    storeId: storeId,
+                                    replace: true,
+                                  );
+                                }
+                                managerPassword.clear();
+                                setDialogState(() {
+                                  registering = false;
+                                  fpMessage = answer['status'] == 200
+                                      ? 'Registered as ${KioskTerminal.name ?? 'this kiosk'}.'
+                                      : '${answer['message'] ?? 'Not registered.'}';
+                                });
+                              },
+                        child: Text(registering ? 'Registering…' : 'Register this kiosk'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const CustomText(
                     content: 'Theme',
@@ -180,6 +256,7 @@ Future<void> promptHostDialog(BuildContext context) {
                       saveServerIP(hostController.text);
                       final branchId = int.tryParse(storeController.text) ?? 1;
                       saveStoreId(branchId);
+                      saveFingerprintEnabled(fpEnabled);
                       Navigator.pop(context);
                     },
                     child: const Text('Save'),
