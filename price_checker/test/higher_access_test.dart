@@ -94,7 +94,7 @@ void main() {
   http.Response json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status);
 
   test('the gallery keeps the finger and what each person may approve', () {
-    final KioskPrint p = KioskPrint.fromJson({'id': 5, 'user_id': 15, 'name': 'A', 'print': 'x', 'finger': 'right_index', 'approves': ['refunds']});
+    final KioskPrint p = KioskPrint.fromJson(const {'id': 5, 'user_id': 15, 'name': 'A', 'print': 'x', 'finger': 'right_index', 'approves': ['refunds']});
     expect([p.finger, p.approves], ['right_index', ['refunds']]);
   });
 

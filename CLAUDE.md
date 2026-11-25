@@ -30,8 +30,25 @@ sidecar sources.
   finger → TIME IN / TIME OUT (`POST /api/v1/device/attendance/punch`).
   The reader is armed on a tap only: libfprint stops a reader left waiting
   ~4 min ("too hot"). Online only (no queue): "No connection — punch at the
-  POS". Enrolment is on a POS (menu → Fingerprints). Backend spec:
+  POS". Enrolment is on a POS (menu → Fingerprints), at an enrol station, or
+  here since 1.1.0 (below). Backend spec:
   `../apex_backend/development/specs/apex_fingerprint_spec.md`.
+- **Higher access (1.1.0+2, 2026-11-25, spec §3c):** a manager approves with a
+  finger (matched at sign-in level) or e-mail + password
+  (`lib/pages/fingerprint/higher_access_dialog.dart` → `POST
+  /api/v1/device/higher-access`); the server answers with a 10-minute grant
+  (`KioskGrant`, sent as `X-Apex-Grant`) for one purpose:
+  - `enrol` (Fingerprints switch): the fingerprint icon in the attendance
+    page's header → *Add fingerprints* (`lib/pages/fingerprint/enrol_page.dart`:
+    the staff list, consent, 5 presses, no finger that is someone else's, a
+    check press — the POS's enrolment) → `POST /api/v1/device/enrol`;
+  - `settings` (Settings switch): the gear (`openSettingsGuarded` in
+    `price_checker_page_controller.dart`) asks once the kiosk is registered
+    and the server answers (signed `device/me`, 3 s); a kiosk that can't reach
+    the server opens Settings without asking (the owner's "way back in" — a
+    wrong address must stay fixable). The gallery is refreshed first, so a
+    finger works right after a restart.
+  Tests `test/higher_access_test.dart`.
 - Config in Hive box `price_checker_settings`: `server_address`
   (default `localhost:8080`), `store_id` (default 1), `fingerprint_enabled`,
   `device_uuid` (the kiosk's id for its registration); the registration's
@@ -57,5 +74,18 @@ feature branches merge `--no-ff` into `dev`.
 - On the kiosk PC, once: `setup_terminal.sh --fingerprint` from the POS
   bundle folder (libfprint, the udev rule for the 4500, fprintd masked).
 - Live check: `price_checker/integration_test/docker/run_live.sh` (needs the
-  DEMO Employee enrolled with the sample "whorl" — the POS's
-  `fingerprint_live_test.dart` does it; clean up after).
+  POS's `fingerprint_live_test.dart` run first: the DEMO Employee's "whorl",
+  the demo admin's "tented_arch", the Demo Cashier's "loop-right"; delete the
+  DEMO Employee's punch that run made, or TIME IN is not offered; at the
+  production thresholds 40/55/10 — at 30/40 the sample "arch" is taken for
+  someone). It punches
+  the DEMO Employee in, opens Settings on the admin's finger, refuses the Demo
+  Cashier's for Add fingerprints and enrols "arch" for the DEMO Employee;
+  clean up after both (the run's devices, prints and the DEMO Employee's
+  punches — never the owner's own prints or punches).
+- macOS (testing with the real 4500 on the office Mac): deployment target
+  12.0 (pods too), sandbox off in `DebugProfile.entitlements`; build in
+  profile, arm64 only (`FLUTTER_XCODE_ARCHS=arm64
+  FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --profile`), run the
+  app binary with `APEX_FP_BIN` pointing at the POS's Mac reader build. One
+  program holds the reader at a time.

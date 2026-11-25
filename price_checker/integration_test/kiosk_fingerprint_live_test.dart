@@ -6,8 +6,12 @@
 //
 // Registers this kiosk as the demo admin (the Settings dialog's call), then
 // on the attendance page: Fingerprint → whorl → DEMO Employee → TIME IN.
+// 1.1.0 (higher access): the Settings open after the admin's finger
+// (tented_arch); Add fingerprints refuses the Demo Cashier's (loop-right),
+// opens on the admin's, and enrols arch for the DEMO Employee.
 //
 //   integration_test/docker/run_live.sh
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:price_checker/controllers/main_controller.dart';
+import 'package:price_checker/controllers/price_checker_page_controller.dart';
 import 'package:price_checker/controllers/theme_controller.dart';
 import 'package:price_checker/pages/attendance/attendance_page.dart';
 import 'package:price_checker/services/fingerprint/kiosk_terminal.dart';
@@ -90,7 +95,50 @@ void main() {
     await waitFor(find.text('TIME IN'), what: 'time in button');
     await tester.tap(find.text('TIME IN'));
     await waitFor(find.text('Time-In Recorded'), seconds: 30, what: 'recorded');
+    await settle(4000);
+
+    // ---- 1.1.0: higher access by a manager's finger ----------------------
+    // The Settings (the gear's guard): the admin's finger opens them.
+    unawaited(openSettingsGuarded(tester.element(find.byType(AttendancePage))));
+    await waitFor(find.text('Manager approval'), what: 'Settings approval');
+    expect(find.text('A manager allows this kiosk to open the Settings for ten minutes.'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ha-finger')));
+    await waitFor(find.text('Manager: place your finger on the reader'), what: 'approval armed');
+    await press('tented_arch');
+    await waitFor(find.textContaining('Registered as'), seconds: 180, what: 'Settings open');
+    await tester.tap(find.text('Cancel').last);
     await settle(1000);
+
+    // Add fingerprints: the Demo Cashier's finger is refused (no Fingerprints
+    // switch); the admin's opens the page; arch is enrolled for the DEMO
+    // Employee (a finger nobody has).
+    await tester.tap(find.byKey(const ValueKey('kiosk-enrol')));
+    await waitFor(find.text('Manager approval'), what: 'enrol approval');
+    await tester.tap(find.byKey(const ValueKey('ha-finger')));
+    await waitFor(find.text('Manager: place your finger on the reader'), what: 'approval armed');
+    await press('loop-right');
+    await waitFor(find.textContaining('Demo Cashier may not'), seconds: 180, what: 'cashier refused');
+    await tester.tap(find.byKey(const ValueKey('ha-finger')));
+    await waitFor(find.text('Manager: place your finger on the reader'), what: 'approval armed again');
+    await press('tented_arch');
+    await waitFor(find.text('Approved by Demo Admin'), seconds: 180, what: 'Add fingerprints page');
+    await waitFor(find.text('DEMO Employee (touch test)'), seconds: 30, what: 'staff list');
+    await tester.tap(find.text('DEMO Employee (touch test)'));
+    await waitFor(find.byKey(const ValueKey('enrol-consent')), what: 'enrol dialog');
+    await tester.tap(find.byKey(const ValueKey('enrol-consent')));
+    await settle(300);
+    await tester.tap(find.text('Start'));
+    await waitFor(find.textContaining('on the reader, then lift it'), seconds: 60, what: 'first press');
+    for (int i = 1; i <= 5; i++) {
+      await press('arch');
+      if (i < 5) await waitFor(find.textContaining('($i of 5)'), seconds: 120, what: 'stage $i');
+    }
+    await waitFor(find.text('Press the same finger once more to check it'), seconds: 300, what: 'check press');
+    await press('arch');
+    await waitFor(find.textContaining('saved for DEMO Employee (touch test)'), seconds: 300, what: 'saved');
+    await tester.tap(find.text('Done'));
+    await settle(3000);
+    expect(KioskTerminal.prints.where((p) => p.name == 'DEMO Employee (touch test)').length, greaterThanOrEqualTo(2));
     await tester.runAsync(() async => reader?.destroy());
   }, timeout: const Timeout(Duration(minutes: 20)));
 }
