@@ -10,6 +10,8 @@
  *   {"cmd":"gallery","params":{"match_min":40,"sign_in_min":55,"margin":10},
  *    "prints":[{"id":"12","user_id":"17","print":"<base64 FP3>"}]}
  *   {"cmd":"scan","req":"r1","purpose":"punch"|"sign_in","timeout":20}
+ *        (+ "all_scores":true: the match / no_match also lists every person's
+ *         best score, scores:[{user_id, score}] — for calibration only)
  *   {"cmd":"enroll","req":"r2","user_id":"17","finger":"right_index","timeout":120}
  *   {"cmd":"verify","req":"r3","user_id":"17","print":"<base64 FP3>","timeout":20}
  *   {"cmd":"cancel"}
@@ -49,7 +51,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef __linux__
 #include <sys/prctl.h>
+#endif
 #include <unistd.h>
 
 #include "prints.h"
@@ -75,6 +79,7 @@ static struct
   OpKind        op;
   gchar        *req;
   gboolean      sign_in;        /* scan purpose */
+  gboolean      all_scores;     /* scan: every person's score too (calibration) */
   gchar        *user_id;        /* enrol / verify: whose finger */
   FpFinger      finger;
   ApexPrint    *target;         /* verify: the print to check against */
@@ -501,6 +506,29 @@ put_duplicates (JsonBuilder *b, GHashTable *people)
   json_builder_end_array (b);
 }
 
+/* Every person's best score — asked for by the enrol station's calibration
+ * ("all_scores": true on a scan); the apps never ask. */
+static void
+put_scores (JsonBuilder *b, GHashTable *people)
+{
+  GHashTableIter it;
+  gpointer value;
+
+  json_builder_set_member_name (b, "scores");
+  json_builder_begin_array (b);
+  g_hash_table_iter_init (&it, people);
+  while (g_hash_table_iter_next (&it, NULL, &value))
+    {
+      Best *best = value;
+
+      json_builder_begin_object (b);
+      put_str (b, "user_id", best->user_id);
+      put_int (b, "score", best->score);
+      json_builder_end_object (b);
+    }
+  json_builder_end_array (b);
+}
+
 static void
 scan_result (FpPrint *print)
 {
@@ -562,6 +590,8 @@ scan_result (FpPrint *print)
         put_int (b, "best", first.score);
         put_int (b, "second", second);
       }
+    if (S.all_scores)
+      put_scores (b, people);
     send_event (b);
   }
 }
@@ -848,6 +878,15 @@ member_id (JsonObject *o, const gchar *key)
   return NULL;
 }
 
+static gboolean
+member_bool (JsonObject *o, const gchar *key)
+{
+  JsonNode *n = o ? json_object_get_member (o, key) : NULL;
+
+  return n != NULL && JSON_NODE_TYPE (n) == JSON_NODE_VALUE
+         && json_node_get_value_type (n) == G_TYPE_BOOLEAN && json_node_get_boolean (n);
+}
+
 static int
 member_int (JsonObject *o, const gchar *key, int fallback)
 {
@@ -989,6 +1028,7 @@ handle_line (const gchar *line)
       if (begin (OP_SCAN, o))
         {
           S.sign_in = g_strcmp0 (member_str (o, "purpose"), "sign_in") == 0;
+          S.all_scores = member_bool (o, "all_scores");
           arm_timeout (o, SCAN_TIMEOUT);
           start_identify ();
         }
@@ -1072,8 +1112,11 @@ main (int argc, char **argv)
   int proto_fd;
   guint i;
 
-  /* Die with the app; the terminal updater only stops apex_pos itself. */
+  /* Die with the app; the terminal updater only stops apex_pos itself.
+   * (Linux; on a Mac, used for checking a reader, stdin's EOF does it.) */
+#ifdef __linux__
   prctl (PR_SET_PDEATHSIG, SIGTERM);
+#endif
 
   /* Keep the protocol on the real stdout; anything else written to fd 1
    * (a stray printf, GLib's default handler) lands on stderr instead. */
@@ -1111,6 +1154,12 @@ main (int argc, char **argv)
   if (S.dev)
     fp_device_close_sync (S.dev, NULL, NULL);
   g_clear_object (&S.dev);
+#ifdef __APPLE__
+  /* Homebrew's libgusb traps in g_usb_context_dispose on macOS (SIGTRAP at
+   * every exit): the reader is closed, so leave without disposing the context. */
+  fclose (S.proto);
+  _exit (0);
+#endif
   g_clear_object (&S.ctx);
   g_ptr_array_unref (S.gallery);
   fclose (S.proto);
