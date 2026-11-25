@@ -49,6 +49,12 @@ sidecar sources.
     wrong address must stay fixable). The gallery is refreshed first, so a
     finger works right after a restart.
   Tests `test/higher_access_test.dart`.
+- **The Settings dialog scrolls** (1.1.1+3, the owner's "settings page is
+  overlapping"): with Fingerprint Attendance on it ran 22 px past a 1366x768
+  screen (190 at 1024x600). A registered kiosk folds the manager's e-mail /
+  password behind *Register again*; the registration message wraps.
+  `test/settings_dialog_test.dart` (5 sizes, registered or not, no overflow,
+  Save on screen).
 - Config in Hive box `price_checker_settings`: `server_address`
   (default `localhost:8080`), `store_id` (default 1), `fingerprint_enabled`,
   `device_uuid` (the kiosk's id for its registration); the registration's

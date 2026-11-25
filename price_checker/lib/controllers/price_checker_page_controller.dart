@@ -71,6 +71,10 @@ Future<void> promptHostDialog(BuildContext context) {
   final managerPassword = TextEditingController();
   bool fpEnabled = fingerprintEnabled;
   bool registering = false;
+  // The manager's e-mail and password are needed once: a registered kiosk
+  // shows them only after "Register again" (they made the dialog taller
+  // than a 1366x768 screen — the owner's "settings page is overlapping").
+  bool showRegister = !KioskTerminal.registered;
   String? fpMessage = KioskTerminal.registered
       ? 'Registered as ${KioskTerminal.name ?? 'this kiosk'}.'
       : 'Not registered: a manager with the Fingerprints switch registers it once.';
@@ -102,161 +106,176 @@ Future<void> promptHostDialog(BuildContext context) {
             ),
             content: SizedBox(
               width: 350,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CustomText(
-                    content: 'Server Host',
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  const SizedBox(height: 8),
-                  CustomTextField(
-                    controller: hostController,
-                    hintText: 'e.g., 192.168.1.100:8080',
-                    onSubmitted: (value) {
-                      host = hostController.text;
-                      saveServerIP(hostController.text);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const CustomText(
-                    content: 'Store ID',
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  const SizedBox(height: 8),
-                  CustomTextField(
-                    controller: storeController,
-                    hintText: 'e.g., 1',
-                    keyboardType: TextInputType.number,
-                    onSubmitted: (value) {
-                      final branchId = int.tryParse(storeController.text) ?? 1;
-                      saveStoreId(branchId);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: CustomText(
-                          content: 'Fingerprint Attendance',
-                          fontSize: 14.0,
-                          fontWeight: FontWeight.w500,
+              // Scrolls on a short screen instead of running over.
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CustomText(
+                      content: 'Server Host',
+                      fontSize: 14.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    const SizedBox(height: 8),
+                    CustomTextField(
+                      controller: hostController,
+                      hintText: 'e.g., 192.168.1.100:8080',
+                      onSubmitted: (value) {
+                        host = hostController.text;
+                        saveServerIP(hostController.text);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const CustomText(
+                      content: 'Store ID',
+                      fontSize: 14.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    const SizedBox(height: 8),
+                    CustomTextField(
+                      controller: storeController,
+                      hintText: 'e.g., 1',
+                      keyboardType: TextInputType.number,
+                      onSubmitted: (value) {
+                        final branchId = int.tryParse(storeController.text) ?? 1;
+                        saveStoreId(branchId);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: CustomText(
+                            content: 'Fingerprint Attendance',
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      Switch(
-                        value: fpEnabled,
-                        activeThumbColor: appColor,
-                        onChanged: (value) {
-                          setDialogState(() => fpEnabled = value);
-                        },
-                      ),
+                        Switch(
+                          value: fpEnabled,
+                          activeThumbColor: appColor,
+                          onChanged: (value) {
+                            setDialogState(() => fpEnabled = value);
+                          },
+                        ),
+                      ],
+                    ),
+                    if (fpEnabled) ...[
+                      const SizedBox(height: 4),
+                      // Wraps: the reason a registration was refused must be read whole.
+                      CustomText(content: fpMessage ?? '', fontSize: 13.0, overFlow: TextOverflow.visible),
+                      if (!showRegister)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: () => setDialogState(() => showRegister = true),
+                            child: const Text('Register again'),
+                          ),
+                        ),
                     ],
-                  ),
-                  if (fpEnabled) ...[
-                    const SizedBox(height: 4),
-                    CustomText(content: fpMessage ?? '', fontSize: 13.0),
-                    const SizedBox(height: 8),
-                    CustomTextField(controller: managerEmail, hintText: 'Manager e-mail'),
-                    const SizedBox(height: 8),
-                    CustomTextField(controller: managerPassword, hintText: 'Password', obscureText: true),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton(
-                        onPressed: registering
-                            ? null
-                            : () async {
-                                // The store and server typed above are the kiosk's.
-                                host = hostController.text;
-                                saveServerIP(hostController.text);
-                                final int storeId = int.tryParse(storeController.text) ?? currentStoreId;
-                                saveStoreId(storeId);
-                                setDialogState(() => registering = true);
-                                Map<String, dynamic> answer = await KioskTerminal.register(
-                                  email: managerEmail.text,
-                                  password: managerPassword.text,
-                                  deviceUuid: kioskDeviceUuid(),
-                                  storeId: storeId,
-                                );
-                                if (answer['code'] == 'replace_needed') {
-                                  answer = await KioskTerminal.register(
+                    if (fpEnabled && showRegister) ...[
+                      const SizedBox(height: 8),
+                      CustomTextField(controller: managerEmail, hintText: 'Manager e-mail'),
+                      const SizedBox(height: 8),
+                      CustomTextField(controller: managerPassword, hintText: 'Password', obscureText: true),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: registering
+                              ? null
+                              : () async {
+                                  // The store and server typed above are the kiosk's.
+                                  host = hostController.text;
+                                  saveServerIP(hostController.text);
+                                  final int storeId = int.tryParse(storeController.text) ?? currentStoreId;
+                                  saveStoreId(storeId);
+                                  setDialogState(() => registering = true);
+                                  Map<String, dynamic> answer = await KioskTerminal.register(
                                     email: managerEmail.text,
                                     password: managerPassword.text,
                                     deviceUuid: kioskDeviceUuid(),
                                     storeId: storeId,
-                                    replace: true,
                                   );
-                                }
-                                managerPassword.clear();
-                                setDialogState(() {
-                                  registering = false;
-                                  fpMessage = answer['status'] == 200
-                                      ? 'Registered as ${KioskTerminal.name ?? 'this kiosk'}.'
-                                      : '${answer['message'] ?? 'Not registered.'}';
-                                });
+                                  if (answer['code'] == 'replace_needed') {
+                                    answer = await KioskTerminal.register(
+                                      email: managerEmail.text,
+                                      password: managerPassword.text,
+                                      deviceUuid: kioskDeviceUuid(),
+                                      storeId: storeId,
+                                      replace: true,
+                                    );
+                                  }
+                                  managerPassword.clear();
+                                  setDialogState(() {
+                                    registering = false;
+                                    if (answer['status'] == 200) showRegister = false;
+                                    fpMessage = answer['status'] == 200
+                                        ? 'Registered as ${KioskTerminal.name ?? 'this kiosk'}.'
+                                        : '${answer['message'] ?? 'Not registered.'}';
+                                  });
+                                },
+                          child: Text(registering ? 'Registering…' : 'Register this kiosk'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    const CustomText(
+                      content: 'Theme',
+                      fontSize: 14.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Row(
+                          children: [
+                            _buildThemeOption(
+                              context: context,
+                              label: 'Light',
+                              icon: Icons.light_mode_outlined,
+                              isSelected: themeController!.themeMode == ThemeMode.light,
+                              onTap: () {
+                                themeController!.setThemeMode(ThemeMode.light);
+                                setDialogState(() {});
                               },
-                        child: Text(registering ? 'Registering…' : 'Register this kiosk'),
+                            ),
+                            _buildThemeOption(
+                              context: context,
+                              label: 'Dark',
+                              icon: Icons.dark_mode_outlined,
+                              isSelected: themeController!.themeMode == ThemeMode.dark,
+                              onTap: () {
+                                themeController!.setThemeMode(ThemeMode.dark);
+                                setDialogState(() {});
+                              },
+                            ),
+                            _buildThemeOption(
+                              context: context,
+                              label: 'System',
+                              icon: Icons.settings_suggest_outlined,
+                              isSelected: themeController!.themeMode == ThemeMode.system,
+                              onTap: () {
+                                themeController!.setThemeMode(ThemeMode.system);
+                                setDialogState(() {});
+                              },
+                              isLast: true,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  const CustomText(
-                    content: 'Theme',
-                    fontSize: 14.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Row(
-                        children: [
-                          _buildThemeOption(
-                            context: context,
-                            label: 'Light',
-                            icon: Icons.light_mode_outlined,
-                            isSelected: themeController!.themeMode == ThemeMode.light,
-                            onTap: () {
-                              themeController!.setThemeMode(ThemeMode.light);
-                              setDialogState(() {});
-                            },
-                          ),
-                          _buildThemeOption(
-                            context: context,
-                            label: 'Dark',
-                            icon: Icons.dark_mode_outlined,
-                            isSelected: themeController!.themeMode == ThemeMode.dark,
-                            onTap: () {
-                              themeController!.setThemeMode(ThemeMode.dark);
-                              setDialogState(() {});
-                            },
-                          ),
-                          _buildThemeOption(
-                            context: context,
-                            label: 'System',
-                            icon: Icons.settings_suggest_outlined,
-                            isSelected: themeController!.themeMode == ThemeMode.system,
-                            onTap: () {
-                              themeController!.setThemeMode(ThemeMode.system);
-                              setDialogState(() {});
-                            },
-                            isLast: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             actions: [
@@ -303,9 +322,7 @@ Widget _buildThemeOption({
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? appColor.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color: isSelected ? appColor.withValues(alpha: 0.15) : Colors.transparent,
           border: isLast
               ? null
               : Border(
@@ -320,9 +337,7 @@ Widget _buildThemeOption({
             Icon(
               icon,
               size: 20,
-              color: isSelected
-                  ? appColor
-                  : ThemeController.getSecondaryTextColor(context),
+              color: isSelected ? appColor : ThemeController.getSecondaryTextColor(context),
             ),
             const SizedBox(height: 4),
             Text(
@@ -330,9 +345,7 @@ Widget _buildThemeOption({
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? appColor
-                    : ThemeController.getSecondaryTextColor(context),
+                color: isSelected ? appColor : ThemeController.getSecondaryTextColor(context),
               ),
             ),
           ],
