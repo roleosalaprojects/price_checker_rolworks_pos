@@ -456,7 +456,7 @@ class _PriceCheckerPageState extends State<PriceCheckerPage> {
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () => promptHostDialog(context),
+                            onTap: () => openSettingsGuarded(context),
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(

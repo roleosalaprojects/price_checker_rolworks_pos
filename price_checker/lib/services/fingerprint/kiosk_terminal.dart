@@ -15,12 +15,47 @@ import 'terminal_signing.dart';
 /// One enrolled print of the gallery (what a match names).
 @immutable
 class KioskPrint {
-  const KioskPrint({required this.id, required this.userId, required this.name, required this.print});
+  const KioskPrint({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.print,
+    this.finger = '',
+    this.approves = const [],
+  });
+
+  factory KioskPrint.fromJson(Map<dynamic, dynamic> p) => KioskPrint(
+        id: '${p['id']}',
+        userId: '${p['user_id']}',
+        name: '${p['name']}',
+        print: '${p['print']}',
+        finger: '${p['finger'] ?? ''}',
+        approves: [for (final t in (p['approves'] is List ? p['approves'] as List : const [])) '$t'],
+      );
 
   final String id;
   final String userId;
   final String name;
   final String print;
+  final String finger;
+
+  /// The POS's Higher Access types this person may approve (the server's).
+  final List<String> approves;
+}
+
+/// A manager's approval at this kiosk (higher access, 2026-11-25): good for
+/// one purpose — `enrol` (adding fingerprints) or `settings` — for ten
+/// minutes. The server checks it again on every use.
+@immutable
+class KioskGrant {
+  const KioskGrant({required this.token, required this.purpose, required this.approverName, required this.expiresAt});
+
+  final String token;
+  final String purpose;
+  final String approverName;
+  final DateTime expiresAt;
+
+  bool get live => DateTime.now().isBefore(expiresAt);
 }
 
 /// Fingerprints (2026-11-25): this kiosk as the Apex server knows it.
@@ -133,7 +168,10 @@ class KioskTerminal {
   }
 
   static Future<http.Response> send(String method, String path,
-      {Map<String, String>? query, Map<String, dynamic>? body}) async {
+      {Map<String, String>? query,
+      Map<String, dynamic>? body,
+      Map<String, String>? headers,
+      Duration timeout = const Duration(seconds: 15)}) async {
     late http.Response response;
     for (var attempt = 0; attempt < 2; attempt++) {
       final Uri uri = Uri.http(host, '/api/v1$path', query);
@@ -141,7 +179,8 @@ class KioskTerminal {
       final int time = _now() + clockOffset;
       final Random r = Random.secure();
       final String nonce = List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
-      final Map<String, String> headers = {
+      final Map<String, String> signed = {
+        ...?headers,
         'Accept': 'application/json',
         if (body != null) 'Content-Type': 'application/json',
         'X-Apex-Device': '$id',
@@ -152,9 +191,9 @@ class KioskTerminal {
             secret!),
       };
       response = await (method == 'GET'
-              ? client.get(uri, headers: headers)
-              : client.post(uri, headers: headers, body: text))
-          .timeout(const Duration(seconds: 15));
+              ? client.get(uri, headers: signed)
+              : client.post(uri, headers: signed, body: text))
+          .timeout(timeout);
       if (response.statusCode != 401) return response;
       final Map<String, dynamic> refusal = decode(response);
       if (refusal['code'] == 'clock_skew' && attempt == 0 && refusal['server_time'] is num) {
@@ -179,7 +218,7 @@ class KioskTerminal {
         params = Map<String, dynamic>.from(opened['params'] as Map? ?? const {});
         prints = [
           for (final p in (opened['prints'] as List? ?? const []))
-            if (p is Map) KioskPrint(id: '${p['id']}', userId: '${p['user_id']}', name: '${p['name']}', print: '${p['print']}'),
+            if (p is Map) KioskPrint.fromJson(p),
         ];
         version = data['version'] as String?;
       }
@@ -196,6 +235,97 @@ class KioskTerminal {
       debugPrint('Kiosk gallery not refreshed: $e');
       return false;
     }
+  }
+
+  /// Whether the server answers this kiosk now (a signed `device/me`, 3 s).
+  /// Settings asks a manager only when it does: a kiosk pointed at the wrong
+  /// address can still be fixed.
+  static Future<bool> serverAnswers() async {
+    if (!registered) return false;
+    try {
+      final http.Response response = await send('GET', '/device/me', timeout: const Duration(seconds: 3));
+      return response.statusCode < 500 && registered;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Higher access: a manager's finger ([who], matched at sign-in level with
+  /// [score]) or e-mail + password, for [purpose] (`enrol` | `settings`).
+  /// The grant, or the server's reason as a String.
+  static Future<Object> higherAccess({
+    required String purpose,
+    KioskPrint? who,
+    int? score,
+    String? email,
+    String? password,
+  }) async {
+    try {
+      final http.Response response = await send('POST', '/device/higher-access', body: {
+        'purpose': purpose,
+        if (who != null) ...{
+          'method': 'fingerprint',
+          'user_id': int.tryParse(who.userId) ?? who.userId,
+          'print_id': int.tryParse(who.id) ?? who.id,
+          'score': score,
+        } else ...{
+          'method': 'password',
+          'email': (email ?? '').trim(),
+          'password': password ?? '',
+        },
+      });
+      final Map<String, dynamic> body = decode(response);
+      final dynamic data = body['data'];
+      if (response.statusCode == 200 && data is Map && data['grant'] is String) {
+        return KioskGrant(
+          token: data['grant'] as String,
+          purpose: purpose,
+          approverName: '${(data['approver'] as Map?)?['name'] ?? ''}',
+          expiresAt: DateTime.now().add(Duration(seconds: (data['expires_in'] as num?)?.toInt() ?? 600)),
+        );
+      }
+      return '${body['message'] ?? 'Not allowed.'}';
+    } catch (_) {
+      return 'The server could not be reached.';
+    }
+  }
+
+  /// The staff and their enrolled fingers (an `enrol` grant). Null with a
+  /// reason when the server says no (the approval expired).
+  static Future<(List<Map<String, dynamic>>?, String?)> enrolStaff(KioskGrant grant) async {
+    try {
+      final http.Response response = await send('GET', '/device/enrol/employees', headers: {'X-Apex-Grant': grant.token});
+      final Map<String, dynamic> body = decode(response);
+      if (response.statusCode != 200) return (null, '${body['message'] ?? 'Not allowed.'}');
+      return ([for (final e in ((body['data'] as Map?)?['employees'] as List? ?? const [])) Map<String, dynamic>.from(e as Map)], null);
+    } catch (_) {
+      return (null, 'The server could not be reached.');
+    }
+  }
+
+  /// Saves an enrolled finger (an `enrol` grant): the POS's rules.
+  static Future<Map<String, dynamic>> enrol(KioskGrant grant,
+      {required String userId, required String finger, required String driver, required String print}) async {
+    try {
+      final http.Response response = await send('POST', '/device/enrol', headers: {'X-Apex-Grant': grant.token}, body: {
+        'user_id': int.tryParse(userId) ?? userId,
+        'finger': finger,
+        'driver': driver,
+        'print': print,
+        'consent': true,
+        'duplicate_check': 'clear',
+      });
+      return decode(response)..['status'] = response.statusCode;
+    } catch (_) {
+      return {'success': false, 'message': 'The server could not be reached.'};
+    }
+  }
+
+  static KioskPrint? byUser(String? userId) {
+    for (final p in prints) {
+      if (p.userId == userId) return p;
+    }
+    return null;
   }
 
   static KioskPrint? byPrint(String? printId) {

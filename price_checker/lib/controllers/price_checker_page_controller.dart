@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/fingerprint/kiosk_terminal.dart';
+import '../pages/fingerprint/higher_access_dialog.dart';
 import 'package:price_checker/components/custom_text_field.dart';
 import 'package:price_checker/controllers/main_controller.dart';
 
@@ -44,6 +45,19 @@ void showDialogAlert(BuildContext context, String msg) {
       );
     },
   );
+}
+
+/// The gear (2026-11-25): a registered kiosk whose server answers asks a
+/// manager first (higher access, the Settings switch). Not registered yet,
+/// or the server out of reach: Settings opens as before, so the address and
+/// the registration can always be fixed.
+Future<void> openSettingsGuarded(BuildContext context) async {
+  if (KioskTerminal.registered && await KioskTerminal.serverAnswers()) {
+    if (!context.mounted) return;
+    final KioskGrant? grant = await askHigherAccess(context, purpose: 'settings');
+    if (grant == null) return;
+  }
+  if (context.mounted) await promptHostDialog(context);
 }
 
 Future<void> promptHostDialog(BuildContext context) {
