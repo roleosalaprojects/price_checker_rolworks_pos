@@ -11,6 +11,8 @@ import '../../models/attendance_record_model.dart';
 import '../../services/fingerprint/kiosk_terminal.dart';
 import '../../services/fingerprint/reader.dart';
 import '../../services/http_service.dart';
+import '../fingerprint/enrol_page.dart';
+import '../fingerprint/higher_access_dialog.dart';
 import 'attendance_history_page.dart';
 
 class AttendancePage extends StatefulWidget {
@@ -108,6 +110,18 @@ class _AttendancePageState extends State<AttendancePage> {
         },
       });
     });
+  }
+
+  Future<void> _addFingerprints() async {
+    if (_fpScanning) await _cancelScan();
+    if (!mounted) return;
+    final KioskGrant? grant = await askHigherAccess(context, purpose: 'enrol');
+    if (grant == null || !mounted) return;
+    final dynamic why = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => KioskEnrolPage(grant: grant)));
+    await KioskTerminal.refreshGallery();
+    if (!mounted) return;
+    setState(() {});
+    if (why is String) showSnack(customSnack('Add fingerprints', why, ContentType.warning), context);
   }
 
   Future<void> _cancelScan() async {
@@ -869,6 +883,28 @@ class _AttendancePageState extends State<AttendancePage> {
                       ),
                     ),
 
+                    Row(children: [
+                    // Add fingerprints (2026-11-25): after a manager's higher access.
+                    if (fingerprintEnabled && FingerprintReader.instance.supported && KioskTerminal.registered) ...[
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          key: const ValueKey('kiosk-enrol'),
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: _addFingerprints,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: ThemeController.getCardColor(context).withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.fingerprint_rounded,
+                                color: ThemeController.getSecondaryTextColor(context), size: 24),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     // History button
                     Material(
                       color: Colors.transparent,
@@ -896,6 +932,7 @@ class _AttendancePageState extends State<AttendancePage> {
                         ),
                       ),
                     ),
+                    ]),
                   ],
                 ),
               ),
