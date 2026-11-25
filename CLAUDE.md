@@ -77,8 +77,8 @@ feature branches merge `--no-ff` into `dev`.
   POS's `fingerprint_live_test.dart` run first: the DEMO Employee's "whorl",
   the demo admin's "tented_arch", the Demo Cashier's "loop-right"; delete the
   DEMO Employee's punch that run made, or TIME IN is not offered; at the
-  production thresholds 40/55/10 — at 30/40 the sample "arch" is taken for
-  someone). It punches
+  production thresholds 40/55/10 — at 30/40 the sample "arch" is no longer
+  refused as unknown). It punches
   the DEMO Employee in, opens Settings on the admin's finger, refuses the Demo
   Cashier's for Add fingerprints and enrols "arch" for the DEMO Employee;
   clean up after both (the run's devices, prints and the DEMO Employee's
